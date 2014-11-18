@@ -1,0 +1,13 @@
+[package]
+
+name = "flac-metadata"
+version = "0.0.1"
+authors = ["Jason Thompson <jason@jthompson.ca>"]
+
+[lib]
+
+name = "flac_metadata"
+
+[[bin]]
+
+name = "flac-metadata"
