@@ -64,12 +64,12 @@ impl Show for BlockHeader {
 BLOCK HEADER:
     Block type: {} 
     Last block: {} 
-    Block length: {}", self.is_last_block, self.block_type, self.block_length));
+    Block length: {}", self.block_type, self.is_last_block, self.block_length));
         Ok(())
     }
 }
 
-pub struct StreamInfoBlock {
+pub struct StreamInfoBlock<'a> {
     minimum_block_size: uint,
     maximum_block_size: uint,
     minimum_frame_size: uint,
@@ -77,17 +77,18 @@ pub struct StreamInfoBlock {
     sample_rate: uint,
     number_of_channels: uint,
     bits_per_sample: uint,
-    total_samples: uint,
-    audio_data_md5_signature: &'static str,
+    total_samples: uint, 
+    audio_data_md5_signature: &'a [u8],
 }
 
-impl StreamInfoBlock {
+impl<'a> StreamInfoBlock<'a> {
     fn parse(block_bytes: &[u8]) -> Result<StreamInfoBlock, &'static str> {
         let total_samples = ((block_bytes[13] as u64 << 4) +
                              (block_bytes[14] as u64 << 12) +
                              (block_bytes[15] as u64 << 28) +
                              (block_bytes[16] as u64 << 60) +
                              (block_bytes[17] as u64 >> 4)) as uint;
+        let md5 = MD5::new(block_bytes.slice(18,34));
         Ok(StreamInfoBlock {
             minimum_block_size: bits_to_uint_16(block_bytes.slice(0,2)),
             maximum_block_size: bits_to_uint_16(block_bytes.slice(2,4)), 
@@ -101,12 +102,31 @@ impl StreamInfoBlock {
             bits_per_sample: (block_bytes[12] << 3) as uint,
             // 36 bits
             total_samples: total_samples,
-            audio_data_md5_signature: fixme,
+            audio_data_md5_signature: md5,
         })
     }
 }
 
-impl Show for StreamInfoBlock {
+pub struct MD5 {
+    signature: &[u8],
+}
+
+impl MD5 {
+    fn new(md5_slice: &[u8]) -> MD5 {
+        MD5 { signature: &[u8] }
+    }
+}
+
+impl Show for MD5 {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        for c in self.iter() {
+            write!(f, "{}", c);
+        }
+    }
+}
+
+    
+impl<'a> Show for StreamInfoBlock<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         try!(write!(f, "
 STREAMINFO BLOCK:
