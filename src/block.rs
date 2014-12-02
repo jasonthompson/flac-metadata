@@ -1,8 +1,9 @@
+extern crate serialize;
+
 use std::fmt::{mod, Show, Formatter};
 use serialize::hex::ToHex;
 
-use util;
-
+use util::*;
 
 #[deriving(Show, Eq, PartialEq)]
 pub enum BlockType {
@@ -15,6 +16,17 @@ pub enum BlockType {
     Picture,
 }
 
+fn get_block_type_by_index(index: uint) -> BlockType {
+    let block_type_list = [BlockType::StreamInfo,
+                           BlockType::Padding,
+                           BlockType::Application,
+                           BlockType::SeekTable,
+                           BlockType::VorbisComment,
+                           BlockType::Cuesheet,
+                           BlockType::Picture];
+    block_type_list[index]
+ }
+
 pub struct BlockHeader {
     is_last_block: bool,
     block_type: BlockType,
@@ -22,12 +34,12 @@ pub struct BlockHeader {
 }
 
 impl BlockHeader {
-    pub fn parse(header_bytes: &[u8]) -> Result<BlockHeader, &'static str> {
+    pub fn parse(header_bytes: &Vec<u8>) -> Result<BlockHeader, &'static str> {
         let first_bit = header_bytes[0] & 0x1;
         let is_last_block = first_bit == 1;
         let block_type_bits = header_bytes[0] << 1;
 
-        let block_type = BlockHeader::get_block_type(block_type_bits as uint).unwrap();
+        let block_type = get_block_type_by_index(block_type_bits as uint);
 
         let block_length = util::bits_to_uint_24(header_bytes.slice(1,4));
         
@@ -36,12 +48,6 @@ impl BlockHeader {
             block_type: block_type,
             block_length: block_length,
         })
-    }
-
-    fn get_block_type(block_type_bits: uint) -> Result<BlockType, &'static str> {
-        let block_type_dict = [StreamInfo, Padding, Application, SeekTable, 
-                               VorbisComment, Cuesheet, Picture];        
-        Ok(block_type_dict[block_type_bits as uint])
     }
     
 }
@@ -71,7 +77,7 @@ pub struct StreamInfoBlock<'a> {
 }
 
 impl<'a> StreamInfoBlock<'a> {
-    pub fn parse(block_bytes: &[u8]) -> Result<StreamInfoBlock, &'static str> {
+    pub fn parse(block_bytes: &Vec<u8>) -> Result<StreamInfoBlock, &'static str> {
         let total_samples = ((block_bytes[13] as u64 << 60) +
                              (block_bytes[14] as u64 << 32) +
                              (block_bytes[15] as u64 << 16) +
@@ -121,17 +127,17 @@ mod tests {
 
     #[test]
     fn test_block_length() {
-        let block_bits = [0x00, 0x00, 0x00, 0x14];
-        let header = super::BlockHeader::parse(block_bits).unwrap();
+        let block_bits = vec![0x00, 0x00, 0x00, 0x14];
+        let header = super::BlockHeader::parse(&block_bits).unwrap();
         assert_eq!(20, header.block_length);
         assert_eq!(false, header.is_last_block);
-        assert_eq!(super::StreamInfo, header.block_type);
+        assert_eq!(super::BlockType::StreamInfo, header.block_type);
     }
     #[test]
     fn test_stream_info_parse() {
-        let block_bytes = [16, 0, 16, 0, 0, 0, 16, 0, 55, 204, 10, 196, 66, 240, 0, 161, 235, 180, 134, 228, 11, 72,
+        let block_bytes = vec![16, 0, 16, 0, 0, 0, 16, 0, 55, 204, 10, 196, 66, 240, 0, 161, 235, 180, 134, 228, 11, 72,
                            80, 182, 87, 11, 41, 90, 91, 38, 134, 143, 114, 67];
-        let block = super::StreamInfoBlock::parse(block_bytes).unwrap();
+        let block = super::StreamInfoBlock::parse(&block_bytes).unwrap();
         assert_eq!(block.minimum_block_size, 4096u);
         assert_eq!(block.maximum_block_size, 4096u);
         assert_eq!(block.minimum_frame_size, 16u);
@@ -141,5 +147,10 @@ mod tests {
         assert_eq!(block.number_of_channels, 2u);
         assert_eq!(block.total_samples, 10611636u);
         assert_eq!(block.audio_data_md5_signature.to_hex(), "86e40b4850b6570b295a5b26868f7243".to_string());
-        }
+    }
+
+    #[test]
+    fn test_get_block_type_by_index() {
+        assert_eq!(super::get_block_type_by_index(1), super::BlockType::StreamInfo);
+    }
 }
