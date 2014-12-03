@@ -1,9 +1,7 @@
-extern crate serialize;
-
 use std::fmt::{mod, Show, Formatter};
 use serialize::hex::ToHex;
 
-use util::*;
+use util;
 
 #[deriving(Show, Eq, PartialEq)]
 pub enum BlockType {
@@ -34,7 +32,7 @@ pub struct BlockHeader {
 }
 
 impl BlockHeader {
-    pub fn parse(header_bytes: &Vec<u8>) -> Result<BlockHeader, &'static str> {
+    pub fn new(header_bytes: &Vec<u8>) -> Result<BlockHeader, &'static str> {
         let first_bit = header_bytes[0] & 0x1;
         let is_last_block = first_bit == 1;
         let block_type_bits = header_bytes[0] << 1;
@@ -49,9 +47,7 @@ impl BlockHeader {
             block_length: block_length,
         })
     }
-    
 }
-
 
 impl Show for BlockHeader {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
@@ -77,7 +73,7 @@ pub struct StreamInfoBlock<'a> {
 }
 
 impl<'a> StreamInfoBlock<'a> {
-    pub fn parse(block_bytes: &Vec<u8>) -> Result<StreamInfoBlock, &'static str> {
+    pub fn new(block_bytes: &Vec<u8>) -> Result<StreamInfoBlock, &'static str> {
         let total_samples = ((block_bytes[13] as u64 << 60) +
                              (block_bytes[14] as u64 << 32) +
                              (block_bytes[15] as u64 << 16) +
@@ -128,7 +124,7 @@ mod tests {
     #[test]
     fn test_block_length() {
         let block_bits = vec![0x00, 0x00, 0x00, 0x14];
-        let header = super::BlockHeader::parse(&block_bits).unwrap();
+        let header = super::BlockHeader::new(&block_bits).unwrap();
         assert_eq!(20, header.block_length);
         assert_eq!(false, header.is_last_block);
         assert_eq!(super::BlockType::StreamInfo, header.block_type);
@@ -137,7 +133,7 @@ mod tests {
     fn test_stream_info_parse() {
         let block_bytes = vec![16, 0, 16, 0, 0, 0, 16, 0, 55, 204, 10, 196, 66, 240, 0, 161, 235, 180, 134, 228, 11, 72,
                            80, 182, 87, 11, 41, 90, 91, 38, 134, 143, 114, 67];
-        let block = super::StreamInfoBlock::parse(&block_bytes).unwrap();
+        let block = super::StreamInfoBlock::new(&block_bytes).unwrap();
         assert_eq!(block.minimum_block_size, 4096u);
         assert_eq!(block.maximum_block_size, 4096u);
         assert_eq!(block.minimum_frame_size, 16u);
@@ -151,6 +147,6 @@ mod tests {
 
     #[test]
     fn test_get_block_type_by_index() {
-        assert_eq!(super::get_block_type_by_index(1), super::BlockType::StreamInfo);
+        assert_eq!(super::get_block_type_by_index(1), super::BlockType::Padding);
     }
 }

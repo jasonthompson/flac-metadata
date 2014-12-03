@@ -10,40 +10,44 @@ struct Parser<'a> {
 }
 
 impl<'a, R: Reader> Parser<'a> {
-    fn new<'a>(reader: &'a mut BufferedReader<R>) -> Parser<'a> {
-        Parser {
-            reader: reader
+    fn new<'a>(reader: &'a mut BufferedReader<R>) -> Result<Parser<'a>, &'static str> {
+        let first_bytes = reader.read_exact(4).unwrap();
+        if first_bytes == vec![102, 76, 97, 67] {      // "fLaC"
+            Ok(Parser {
+                reader: reader
+            })
+        } else {
+            Err("This is not a FLAC file")
         }
     }
 
-     fn next_header(&mut self) -> Result<block::BlockHeader, &'static str> {
-         let header_bytes = self.reader.read_exact(4).unwrap();
-         let header: block::BlockHeader = try!(block::BlockHeader::parse(&header_bytes));
-         Ok(header)
+    fn parse(&mut self) {
+        // read next header
+        let header_bytes = self.reader.read_exact(4).unwrap();
+        let header: block::BlockHeader = block::BlockHeader::new(&header_bytes).unwrap();
+        println!("{}", header);
     }
 }
 
-#[allow(dead_code)]
-fn is_flac(first_four_bytes: &Vec<u8>) -> bool {
-    *first_four_bytes == vec![102, 76, 97, 67]   // "fLaC"
-}
+const USAGE: &'static str = "
+FLAC Audio File Metadata Reader
 
+Usage:
+    flac-metadata [OPTIONS]... FILE
+
+Options:
+";
+    
 #[allow(dead_code)]   
 fn main() {
     let args = os::args();
-    let file_name = &args[1];
-    
-    let path = Path::new(file_name);
-    let mut reader: &mut BufferedReader<File> = &mut BufferedReader::new(File::open(&path).unwrap());
-    let mut parser = Parser::new(reader);
-    
-    let first_bytes = parser.reader.read_exact(4).unwrap();
 
-    if is_flac(&first_bytes) {
-        println!("{}", parser.next_header().unwrap());
-        // let stream_info_bytes: Vec<u8> = parser.reader.read_exact(header.block_length).unwrap();
-        // let stream_info = block::StreamInfoBlock::parse(&stream_info_bytes);
-        // println!("{}", stream_info_bytes);
-        // println!("{}", stream_info.unwrap());
-    }
+    if args.len() == 1 {
+        println!("Please provide the name of a FLAC audio file.\n {}", USAGE);
+    } else {
+        let path = Path::new(&args[1]);
+        let mut reader = &mut BufferedReader::new(File::open(&path).unwrap());
+        let parser = Parser::new(reader).unwrap();
+        parser.parse();
+    }    
 }        
