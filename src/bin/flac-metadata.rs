@@ -9,8 +9,8 @@ struct Parser<'a> {
     reader: &'a mut (Reader + 'a),
 }
 
-impl<'a, R: Reader> Parser<'a> {
-    fn new<'a>(reader: &'a mut BufferedReader<R>) -> Result<Parser<'a>, &'static str> {
+impl<'a> Parser<'a> {
+    fn new<'a, R: Reader>(reader: &'a mut BufferedReader<R>) -> Result<Parser<'a>, &'static str> {
         let first_bytes = reader.read_exact(4).unwrap();
         if first_bytes == vec![102, 76, 97, 67] {      // "fLaC"
             Ok(Parser {
@@ -20,12 +20,19 @@ impl<'a, R: Reader> Parser<'a> {
             Err("This is not a FLAC file")
         }
     }
-
-    fn parse(&mut self) {
-        // read next header
+    
+    fn next_block_header<'a>(&'a mut self) -> block::BlockHeader {
         let header_bytes = self.reader.read_exact(4).unwrap();
-        let header: block::BlockHeader = block::BlockHeader::new(&header_bytes).unwrap();
-        println!("{}", header);
+        block::BlockHeader::new(&header_bytes)
+    }
+
+    fn parse<'a>(&'a mut self) {
+        let next_header = self.next_block_header();
+        
+        let block_bytes = self.reader.read_exact(next_header.block_length).unwrap();
+        let block: block::StreamInfoBlock = block::Block::new(&block_bytes, next_header);
+
+        println!("{}", block);
     }
 }
 
@@ -47,7 +54,8 @@ fn main() {
     } else {
         let path = Path::new(&args[1]);
         let mut reader = &mut BufferedReader::new(File::open(&path).unwrap());
-        let parser = Parser::new(reader).unwrap();
+        let mut parser = &mut Parser::new(reader).unwrap();
         parser.parse();
     }    
 }        
+ 

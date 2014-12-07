@@ -3,6 +3,12 @@ use serialize::hex::ToHex;
 
 use util;
 
+pub trait Block {
+    fn new(bytes: &Vec<u8>, header: BlockHeader) -> Self;
+
+    fn print(&self);
+}
+
 #[deriving(Show, Eq, PartialEq)]
 pub enum BlockType {
     StreamInfo,
@@ -23,7 +29,7 @@ fn get_block_type_by_index(index: uint) -> BlockType {
                            BlockType::Cuesheet,
                            BlockType::Picture];
     block_type_list[index]
- }
+}
 
 pub struct BlockHeader {
     is_last_block: bool,
@@ -32,7 +38,7 @@ pub struct BlockHeader {
 }
 
 impl BlockHeader {
-    pub fn new(header_bytes: &Vec<u8>) -> Result<BlockHeader, &'static str> {
+    pub fn new(header_bytes: &Vec<u8>) -> BlockHeader {
         let first_bit = header_bytes[0] & 0x1;
         let is_last_block = first_bit == 1;
         let block_type_bits = header_bytes[0] << 1;
@@ -41,11 +47,11 @@ impl BlockHeader {
 
         let block_length = util::bits_to_uint_24(header_bytes.slice(1,4));
         
-        Ok(BlockHeader {
+        BlockHeader {
             is_last_block: is_last_block,
             block_type: block_type,
             block_length: block_length,
-        })
+        }
     }
 }
 
@@ -60,7 +66,8 @@ BLOCK HEADER:
     }
 }
 
-pub struct StreamInfoBlock<'a> {
+pub struct StreamInfoBlock {
+    header: BlockHeader,
     minimum_block_size: uint,
     maximum_block_size: uint,
     minimum_frame_size: uint,
@@ -69,19 +76,41 @@ pub struct StreamInfoBlock<'a> {
     number_of_channels: uint,
     bits_per_sample: uint,
     total_samples: uint, 
-    audio_data_md5_signature: &'a [u8],
+    audio_data_md5_signature: Box<Vec<u8>>,
 }
 
-impl<'a> StreamInfoBlock<'a> {
-    pub fn new(block_bytes: &Vec<u8>) -> Result<StreamInfoBlock, &'static str> {
+impl Show for StreamInfoBlock {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        try!(write!(f, "
+{}
+STREAMINFO BLOCK:
+    Minimum block size: {}
+    Maximum block size: {}
+    Minimum frame size: {}
+    Maximum frame size: {}
+    Sample rate: {}
+    Number of channels: {}
+    Bits per sample: {}
+    Total samples: {}
+    Audio data MD5 signature: {:}
+", self.header, self.minimum_block_size, self.maximum_block_size, self.minimum_frame_size, self.maximum_frame_size, self.sample_rate, self.number_of_channels, self.bits_per_sample, self.total_samples, self.audio_data_md5_signature.to_hex()));
+        Ok(())
+    }
+}
+
+impl Block for StreamInfoBlock {
+    fn new(block_bytes: &Vec<u8>, header: BlockHeader) -> StreamInfoBlock {
         let total_samples = ((block_bytes[13] as u64 << 60) +
                              (block_bytes[14] as u64 << 32) +
                              (block_bytes[15] as u64 << 16) +
                              (block_bytes[16] as u64 << 8) +
                              (block_bytes[17] as u64)) as uint;
-        let md5 = block_bytes.slice(18,34);
+        let mut vec = Vec::new();
+        vec.push_all(block_bytes.slice(18,34));
+        let md5 = box vec;
         
-        Ok(StreamInfoBlock {
+        StreamInfoBlock {
+            header: header,
             minimum_block_size: util::bits_to_uint_16(block_bytes.slice(0,2)),
             maximum_block_size: util::bits_to_uint_16(block_bytes.slice(2,4)), 
             minimum_frame_size: util::bits_to_uint_24(block_bytes.slice(4,7)),
@@ -95,27 +124,14 @@ impl<'a> StreamInfoBlock<'a> {
             // 36 bits
             total_samples: total_samples,
             audio_data_md5_signature: md5,
-        })
+        }
+    }
+
+    fn print(&self) {
+        println!("{}", self);
     }
 }
-    
-impl<'a> Show for StreamInfoBlock<'a> {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        try!(write!(f, "
-STREAMINFO BLOCK:
-    Minimum block size: {}
-    Maximum block size: {}
-    Minimum frame size: {}
-    Maximum frame size: {}
-    Sample rate: {}
-    Number of channels: {}
-    Bits per sample: {}
-    Total samples: {}
-    Audio data MD5 signature: {:}
-", self.minimum_block_size, self.maximum_block_size, self.minimum_frame_size, self.maximum_frame_size, self.sample_rate, self.number_of_channels, self.bits_per_sample, self.total_samples, self.audio_data_md5_signature.to_hex()));
-        Ok(())
-    }
-}
+
 
 #[cfg(test)]
 mod tests {
@@ -123,17 +139,19 @@ mod tests {
 
     #[test]
     fn test_block_length() {
-        let block_bits = vec![0x00, 0x00, 0x00, 0x14];
-        let header = super::BlockHeader::new(&block_bits).unwrap();
+        let block_bytes = vec![0x00, 0x00, 0x00, 0x14];
+        let header = super::BlockHeader::new(&block_bytes);
         assert_eq!(20, header.block_length);
         assert_eq!(false, header.is_last_block);
         assert_eq!(super::BlockType::StreamInfo, header.block_type);
     }
     #[test]
     fn test_stream_info_parse() {
+        let header_bytes = vec![0x00, 0x00, 0x00, 0x22];
+        let header = super::BlockHeader::new(&header_bytes);
         let block_bytes = vec![16, 0, 16, 0, 0, 0, 16, 0, 55, 204, 10, 196, 66, 240, 0, 161, 235, 180, 134, 228, 11, 72,
                            80, 182, 87, 11, 41, 90, 91, 38, 134, 143, 114, 67];
-        let block = super::StreamInfoBlock::new(&block_bytes).unwrap();
+        let block: &super::StreamInfoBlock = &super::Block::new(&block_bytes, header);
         assert_eq!(block.minimum_block_size, 4096u);
         assert_eq!(block.maximum_block_size, 4096u);
         assert_eq!(block.minimum_frame_size, 16u);
