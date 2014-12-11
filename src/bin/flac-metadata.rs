@@ -14,7 +14,8 @@ impl<'a> Parser<'a> {
         let first_bytes = reader.read_exact(4).unwrap();
         if first_bytes == vec![102, 76, 97, 67] {      // "fLaC"
             Ok(Parser {
-                reader: reader
+                reader: reader,
+                
             })
         } else {
             Err("This is not a FLAC file")
@@ -28,11 +29,16 @@ impl<'a> Parser<'a> {
 
     fn parse<'a>(&'a mut self) {
         let next_header = self.next_block_header();
-        
-        let block_bytes = self.reader.read_exact(next_header.block_length).unwrap();
-        let block: block::StreamInfoBlock = block::Block::new(&block_bytes, next_header);
+        let block_length = next_header.block_length;
+        let block_type = next_header.block_type;
+        let block_bytes = self.reader.read_exact(block_length).unwrap();
 
-        println!("{}", block);
+        // Using println! here, but for the library I'd be returning the block itself or
+        // adding it to a stack of blocks.
+        match block_type {
+            block::BlockType::StreamInfo => println!("{}", block::Block::new(&block_bytes, next_header)),
+            _ => println!("Oops"),
+        }
     }
 }
 

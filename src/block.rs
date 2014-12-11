@@ -33,7 +33,7 @@ fn get_block_type_by_index(index: uint) -> BlockType {
 
 pub struct BlockHeader {
     is_last_block: bool,
-    block_type: BlockType,
+    pub block_type: BlockType,
     pub block_length: uint,
 }
 
