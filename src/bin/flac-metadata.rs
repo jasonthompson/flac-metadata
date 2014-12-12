@@ -7,6 +7,7 @@ use flac_metadata::block;
 
 struct Parser<'a> {
     reader: &'a mut (Reader + 'a),
+    done: bool,
 }
 
 impl<'a> Parser<'a> {
@@ -15,7 +16,7 @@ impl<'a> Parser<'a> {
         if first_bytes == vec![102, 76, 97, 67] {      // "fLaC"
             Ok(Parser {
                 reader: reader,
-                
+                done: false,
             })
         } else {
             Err("This is not a FLAC file")
@@ -24,11 +25,16 @@ impl<'a> Parser<'a> {
     
     fn next_block_header<'a>(&'a mut self) -> block::BlockHeader {
         let header_bytes = self.reader.read_exact(4).unwrap();
-        block::BlockHeader::new(&header_bytes)
+        let block_header = block::BlockHeader::new(&header_bytes);
+
+        self.done = block_header.is_last_block;
+        block_header
     }
 
-    fn parse<'a>(&'a mut self) {
+    fn next_block<'a>(&'a mut self) {
         let next_header = self.next_block_header();
+
+  
         let block_length = next_header.block_length;
         let block_type = next_header.block_type;
         let block_bytes = self.reader.read_exact(block_length).unwrap();
@@ -37,7 +43,12 @@ impl<'a> Parser<'a> {
         // adding it to a stack of blocks.
         match block_type {
             block::BlockType::StreamInfo => println!("{}", block::Block::new(&block_bytes, next_header)),
-            _ => println!("Oops"),
+            block::BlockType::Padding => println!("{}", next_header),
+            block::BlockType::Application => println!("{}", next_header),
+            block::BlockType::SeekTable => println!("{}", next_header),
+            block::BlockType::VorbisComment => println!("{}", next_header),
+            block::BlockType::Cuesheet => println!("{}", next_header),
+            block::BlockType::Picture => println!("{}", next_header),
         }
     }
 }
@@ -61,7 +72,9 @@ fn main() {
         let path = Path::new(&args[1]);
         let mut reader = &mut BufferedReader::new(File::open(&path).unwrap());
         let mut parser = &mut Parser::new(reader).unwrap();
-        parser.parse();
+        while parser.done != true {
+            parser.next_block();
+        }
     }    
 }        
  

@@ -32,19 +32,17 @@ fn get_block_type_by_index(index: uint) -> BlockType {
 }
 
 pub struct BlockHeader {
-    is_last_block: bool,
+    pub is_last_block: bool,
     pub block_type: BlockType,
     pub block_length: uint,
 }
 
 impl BlockHeader {
     pub fn new(header_bytes: &Vec<u8>) -> BlockHeader {
-        let first_bit = header_bytes[0] & 0x1;
+        let first_bit = header_bytes[0] >> 7;
         let is_last_block = first_bit == 1;
-        let block_type_bits = header_bytes[0] << 1;
-
+        let block_type_bits = header_bytes[0] & 0x1F;
         let block_type = get_block_type_by_index(block_type_bits as uint);
-
         let block_length = util::bits_to_uint_24(header_bytes.slice(1,4));
         
         BlockHeader {
@@ -58,7 +56,6 @@ impl BlockHeader {
 impl Show for BlockHeader {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         try!(write!(f, "
-BLOCK HEADER:
     Block type: {} 
     Last block: {} 
     Block length: {}", self.block_type, self.is_last_block, self.block_length));
@@ -82,8 +79,7 @@ pub struct StreamInfoBlock {
 impl Show for StreamInfoBlock {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         try!(write!(f, "
-{}
-STREAMINFO BLOCK:
+    {}
     Minimum block size: {}
     Maximum block size: {}
     Minimum frame size: {}
